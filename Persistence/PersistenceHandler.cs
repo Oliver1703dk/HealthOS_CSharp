@@ -14,7 +14,6 @@ namespace HealthOS.Persistence
 
         private PersistenceHandler()
         {
-            // Update these values to match your PostgreSQL settings
             string host = "localhost";
             int port = 5432;
             string database = "postgres";
@@ -28,11 +27,7 @@ namespace HealthOS.Persistence
 
         public static PersistenceHandler GetInstance()
         {
-            if (_instance == null)
-            {
-                _instance = new PersistenceHandler();
-            }
-            return _instance;
+            return _instance ??= new PersistenceHandler();
         }
 
         private void InitializePostgresqlDatabase()
@@ -41,6 +36,7 @@ namespace HealthOS.Persistence
             {
                 _connection = new NpgsqlConnection(_connectionString);
                 _connection.Open();
+                PrepareStatements();
             }
             catch (Exception ex)
             {
@@ -49,10 +45,31 @@ namespace HealthOS.Persistence
             }
         }
 
+        private void PrepareStatements()
+        {
+            using var cmd = _connection.CreateCommand();
+
+            cmd.CommandText = "SELECT * FROM employees";
+            cmd.Prepare();
+
+            cmd.CommandText = "SELECT * FROM employees WHERE id = @id";
+            cmd.Parameters.Add(new NpgsqlParameter("@id", DbType.Int32));
+            cmd.Prepare();
+
+            cmd.CommandText = "INSERT INTO employees (name, phone, position_id, department_id, room_id) VALUES (@name, @phone, @position_id, @department_id, @room_id)";
+            cmd.Parameters.Add(new NpgsqlParameter("@name", DbType.String));
+            cmd.Parameters.Add(new NpgsqlParameter("@phone", DbType.Int32));
+            cmd.Parameters.Add(new NpgsqlParameter("@position_id", DbType.Int32));
+            cmd.Parameters.Add(new NpgsqlParameter("@department_id", DbType.Int32));
+            cmd.Parameters.Add(new NpgsqlParameter("@room_id", DbType.Int32));
+            cmd.Prepare();
+        }
+
         public List<Employee> GetEmployees()
         {
             List<Employee> employees = new List<Employee>();
             using var cmd = new NpgsqlCommand("SELECT * FROM employees", _connection);
+            cmd.Prepare();
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
             {
@@ -68,6 +85,7 @@ namespace HealthOS.Persistence
         {
             using var cmd = new NpgsqlCommand("SELECT * FROM employees WHERE id = @id", _connection);
             cmd.Parameters.AddWithValue("@id", id);
+            cmd.Prepare();
             using var reader = cmd.ExecuteReader();
             return reader.Read()
                 ? new Employee(reader.GetInt32(0), reader.GetString(1), reader.GetInt32(2),
@@ -84,6 +102,7 @@ namespace HealthOS.Persistence
             cmd.Parameters.AddWithValue("@position_id", employee.PositionId);
             cmd.Parameters.AddWithValue("@department_id", employee.DepartmentId);
             cmd.Parameters.AddWithValue("@room_id", employee.RoomId);
+            cmd.Prepare();
             return cmd.ExecuteNonQuery() > 0;
         }
 
@@ -91,6 +110,7 @@ namespace HealthOS.Persistence
         {
             List<Patient> patients = new List<Patient>();
             using var cmd = new NpgsqlCommand("SELECT * FROM patients", _connection);
+            cmd.Prepare();
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
             {
@@ -105,6 +125,7 @@ namespace HealthOS.Persistence
         {
             using var cmd = new NpgsqlCommand("SELECT * FROM patients WHERE id = @id", _connection);
             cmd.Parameters.AddWithValue("@id", id);
+            cmd.Prepare();
             using var reader = cmd.ExecuteReader();
             return reader.Read()
                 ? new Patient(reader.GetInt32(0), reader.GetString(1), reader.GetString(2), reader.GetInt32(3))
@@ -118,6 +139,7 @@ namespace HealthOS.Persistence
             cmd.Parameters.AddWithValue("@name", patient.Name);
             cmd.Parameters.AddWithValue("@phone", patient.Phone);
             cmd.Parameters.AddWithValue("@cpr_number", patient.CprNumber);
+            cmd.Prepare();
             return cmd.ExecuteNonQuery() > 0;
         }
 
@@ -125,6 +147,7 @@ namespace HealthOS.Persistence
         {
             List<Bed> beds = new List<Bed>();
             using var cmd = new NpgsqlCommand("SELECT * FROM beds", _connection);
+            cmd.Prepare();
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
             {
@@ -133,21 +156,12 @@ namespace HealthOS.Persistence
             return beds;
         }
 
-        public Bed GetBed(int id)
-        {
-            using var cmd = new NpgsqlCommand("SELECT * FROM beds WHERE id = @id", _connection);
-            cmd.Parameters.AddWithValue("@id", id);
-            using var reader = cmd.ExecuteReader();
-            return reader.Read()
-                ? new Bed(reader.GetInt32(0), reader.GetString(1))
-                : null;
-        }
-
         public bool CreateBed(Bed bed)
         {
             using var cmd = new NpgsqlCommand(
                 "INSERT INTO beds (bed_number) VALUES (@bed_number)", _connection);
             cmd.Parameters.AddWithValue("@bed_number", bed.BedNumber);
+            cmd.Prepare();
             return cmd.ExecuteNonQuery() > 0;
         }
 
@@ -155,6 +169,7 @@ namespace HealthOS.Persistence
         {
             List<Admission> admissions = new List<Admission>();
             using var cmd = new NpgsqlCommand("SELECT * FROM admissions", _connection);
+            cmd.Prepare();
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
             {
@@ -165,17 +180,6 @@ namespace HealthOS.Persistence
             return admissions;
         }
 
-        public Admission GetAdmission(int id)
-        {
-            using var cmd = new NpgsqlCommand("SELECT * FROM admissions WHERE id = @id", _connection);
-            cmd.Parameters.AddWithValue("@id", id);
-            using var reader = cmd.ExecuteReader();
-            return reader.Read()
-                ? new Admission(reader.GetInt32(0), reader.GetInt32(1), reader.GetInt32(2),
-                               reader.GetInt32(3), reader.GetInt32(4))
-                : null;
-        }
-
         public bool CreateAdmission(Admission admission)
         {
             using var cmd = new NpgsqlCommand(
@@ -184,6 +188,7 @@ namespace HealthOS.Persistence
             cmd.Parameters.AddWithValue("@room_id", admission.RoomId);
             cmd.Parameters.AddWithValue("@bed_id", admission.BedId);
             cmd.Parameters.AddWithValue("@assigned_employee_id", admission.AssignedEmployeeId);
+            cmd.Prepare();
             return cmd.ExecuteNonQuery() > 0;
         }
 
@@ -191,6 +196,7 @@ namespace HealthOS.Persistence
         {
             using var cmd = new NpgsqlCommand("DELETE FROM admissions WHERE id = @id", _connection);
             cmd.Parameters.AddWithValue("@id", id);
+            cmd.Prepare();
             return cmd.ExecuteNonQuery() > 0;
         }
     }
